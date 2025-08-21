@@ -1,18 +1,44 @@
+import os
 import sqlite3
+import tempfile
+from pathlib import Path
 from datetime import datetime
 import streamlit as st
 
-DB_PATH = "policy_agent.db"
+# -----------------------------
+# Choose a writable DB path
+#   - On Streamlit Cloud: /mount/src (repo) is read-only; /mount/data is writable.
+#   - Fallback to OS temp dir if /mount/data doesn't exist.
+# -----------------------------
+def _default_db_path() -> str:
+    data_dir = Path("/mount/data")
+    if data_dir.exists() and os.access(data_dir, os.W_OK):
+        return str(data_dir / "policy_agent.db")
+    # local/dev: current working dir is usually writable; if not, use temp dir
+    cwd = Path.cwd()
+    try:
+        test = cwd / ".writetest"
+        test.write_text("ok")
+        test.unlink(missing_ok=True)
+        return str(cwd / "policy_agent.db")
+    except Exception:
+        return str(Path(tempfile.gettempdir()) / "policy_agent.db")
+
+DB_PATH = _default_db_path()
 
 # -----------------------------
 # SQLite helpers
 # -----------------------------
 def get_conn():
-    conn = sqlite3.connect(DB_PATH)
-    conn.execute("PRAGMA journal_mode=WAL")
+    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+    try:
+        conn.execute("PRAGMA journal_mode=WAL")
+    except Exception:
+        pass
     return conn
 
 def init_db():
+    Path(DB_PATH).parent.mkdir(parents=True, exist_ok=True)
     with get_conn() as conn:
         conn.execute("""
         CREATE TABLE IF NOT EXISTS policies (
@@ -60,17 +86,22 @@ def set_policy(key: str, value: str):
         conn.commit()
 
 def log_decision(scenario: str, action: str, allowed: bool, params: str = "", reason: str = ""):
-    pol = get_policies()
-    if pol.get("audit_logging", "true").lower() != "true":
-        return
-    with get_conn() as conn:
-        conn.execute(
-            "INSERT INTO audit_log(ts, scenario, action, allowed, params, reason) VALUES(?,?,?,?,?,?)",
-            (datetime.utcnow().isoformat(timespec="seconds")+"Z", scenario, action, 1 if allowed else 0, params, reason),
-        )
-        conn.commit()
+    # Non-fatal audit: failure here should not crash the playbook
+    try:
+        pol = get_policies()
+        if pol.get("audit_logging", "true").lower() != "true":
+            return
+        with get_conn() as conn:
+            conn.execute(
+                "INSERT INTO audit_log(ts, scenario, action, allowed, params, reason) VALUES(?,?,?,?,?,?)",
+                (datetime.utcnow().isoformat(timespec="seconds")+"Z", scenario, action, 1 if allowed else 0, params, reason),
+            )
+            conn.commit()
+    except Exception as e:
+        # Surface a gentle warning in the UI once per run
+        st.session_state["_audit_warn"] = f"Audit log write failed: {e}"
 
-def read_audit(limit: int = 200):
+def read_audit(limit: int = 100):
     with get_conn() as conn:
         rows = conn.execute(
             "SELECT ts, scenario, action, allowed, params, reason FROM audit_log ORDER BY id DESC LIMIT ?",
@@ -179,7 +210,6 @@ SCENARIOS = {
 st.set_page_config(page_title="Cybersecurity Playbook Simulator", page_icon="🛡️", layout="wide")
 st.title("🛡️ Cybersecurity Playbook Simulator")
 st.caption("Policy-bounded actions with SQLite-backed policies and audit logs.")
-
 init_db()
 
 with st.sidebar:
@@ -199,7 +229,7 @@ with st.sidebar:
         set_policy("allow_endpoint_isolation", "true" if allow_iso else "false")
         set_policy("require_human_approval", "true" if require else "false")
         set_policy("audit_logging", "true" if audit else "false")
-        st.success("Policies saved.", icon="✅")
+        st.success(f"Policies saved. DB @ {DB_PATH}", icon="✅")
 
     st.markdown("---")
     st.subheader("Audit Log")
@@ -229,6 +259,8 @@ if st.button("🚀 Execute playbook", type="primary"):
         st.session_state.trace.append(f"STEP • {step_desc} [{action_code}]")
         result = fn(ctx)
         st.session_state.trace.append(f"→ {result}")
+    if "_audit_warn" in st.session_state:
+        st.warning(st.session_state.pop("_audit_warn"))
     st.session_state.trace.append("DONE")
 
 st.markdown("### ✅ Execution trace")
@@ -245,4 +277,5 @@ if rows:
         st.write(f"- `{ts}` — **{sc}** — {action} → **{status}** — {params or ''} {('— '+reason) if reason else ''}")
 else:
     st.write("No audit entries yet.")
+
 
