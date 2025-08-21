@@ -9,7 +9,6 @@ import pandas as pd
 # Page configuration
 st.set_page_config(
     page_title="Policy-Bounded AI Agent Simulator",
-    page_icon="🛡️",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -390,9 +389,6 @@ def main():
     st.divider()
     display_learning_exercises()
     
-    # Footer
-    st.markdown("---")
-    st.markdown("*Policy-Bounded AI Agent Simulator - Educational Demo*")
 
 if __name__ == "__main__":
     main()
