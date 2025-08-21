@@ -1,398 +1,171 @@
+import ast
+import operator as op
 import streamlit as st
-import time
-import json
-from datetime import datetime
-from dataclasses import dataclass
-from typing import List, Dict, Optional
-import pandas as pd
 
-# Page configuration
-st.set_page_config(
-    page_title="Policy-Bounded AI Agent Simulator",
-    page_icon="🛡️",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
-
-@dataclass
-class AgentAction:
-    action_id: str
-    description: str
-    requires_permission: str
-    risk_level: str
-    needs_escalation: bool = False
-    sensitive_data: bool = False
-
-@dataclass
-class PolicyResult:
-    action: AgentAction
-    status: str  # "approved", "denied", "escalated"
-    reason: str
-    timestamp: str
-
-class PolicyEnforcementLayer:
-    def __init__(self, policies: Dict[str, bool]):
-        self.policies = policies
-        self.audit_log = []
-    
-    def evaluate_action(self, action: AgentAction) -> PolicyResult:
-        timestamp = datetime.now().strftime("%H:%M:%S")
-        
-        # Check if permission is granted
-        if not self.policies.get(action.requires_permission, False):
-            result = PolicyResult(
-                action=action,
-                status="denied",
-                reason=f"Policy '{action.requires_permission}' is disabled",
-                timestamp=timestamp
-            )
-        elif action.needs_escalation and self.policies.get("require_escalation", True):
-            result = PolicyResult(
-                action=action,
-                status="escalated",
-                reason="Action requires human approval due to escalation policy",
-                timestamp=timestamp
-            )
-        else:
-            result = PolicyResult(
-                action=action,
-                status="approved",
-                reason="Action meets all policy requirements",
-                timestamp=timestamp
-            )
-        
-        # Log the decision if audit logging is enabled
-        if self.policies.get("audit_logging", False):
-            self.audit_log.append({
-                "timestamp": timestamp,
-                "action": action.action_id,
-                "status": result.status,
-                "reason": result.reason,
-                "risk_level": action.risk_level
-            })
-        
-        return result
-
-# Define cybersecurity scenarios
-SCENARIOS = {
-    "suspicious_login": {
-        "title": "🔐 Suspicious Login Investigation",
-        "description": "Multiple failed login attempts from IP 192.168.20.55 at 3:00 AM",
-        "context": "Geographic anomaly: IP originates from a different country than user's typical location",
-        "actions": [
-            AgentAction("query_auth_logs", "Query authentication logs for suspicious IP", "read_logs", "low"),
-            AgentAction("check_threat_intel", "Check IP reputation in threat intelligence feeds", "threat_intelligence", "low"),
-            AgentAction("analyze_user_pattern", "Analyze user's typical login patterns", "read_logs", "medium"),
-            AgentAction("block_ip", "Block suspicious IP address", "network_controls", "high", needs_escalation=True),
-            AgentAction("disable_account", "Disable potentially compromised user account", "account_management", "high", needs_escalation=True),
-            AgentAction("access_user_profile", "Access user HR profile for contact information", "hr_data_access", "medium", sensitive_data=True)
-        ]
-    },
-    "malware_detection": {
-        "title": "🦠 Malware Detection Response",
-        "description": "Endpoint DESK-001 triggered malware signature 'Trojan.Win32.Generic'",
-        "context": "Malware detected during routine scan, system still operational but potentially compromised",
-        "actions": [
-            AgentAction("query_endpoint_logs", "Retrieve endpoint activity and process logs", "read_logs", "low"),
-            AgentAction("scan_file_hash", "Query malware hash in threat intelligence", "threat_intelligence", "low"),
-            AgentAction("analyze_network_traffic", "Analyze network connections from infected endpoint", "network_monitoring", "medium"),
-            AgentAction("isolate_endpoint", "Isolate endpoint from corporate network", "network_controls", "high", needs_escalation=True),
-            AgentAction("quarantine_files", "Quarantine suspected malicious files", "endpoint_controls", "medium", needs_escalation=True),
-            AgentAction("notify_user", "Send security alert to endpoint user", "communication", "low")
-        ]
-    },
-    "data_exfiltration": {
-        "title": "📤 Data Exfiltration Alert",
-        "description": "Unusual large data transfer (2.5GB) to external IP 203.0.113.5",
-        "context": "Transfer occurred outside business hours from finance department workstation",
-        "actions": [
-            AgentAction("analyze_transfer_logs", "Analyze data transfer patterns and volume", "read_logs", "medium"),
-            AgentAction("check_destination_ip", "Verify reputation of destination IP address", "threat_intelligence", "low"),
-            AgentAction("identify_data_types", "Classify types of data being transferred", "data_classification", "high", sensitive_data=True),
-            AgentAction("block_external_ip", "Block traffic to suspicious external IP", "network_controls", "high", needs_escalation=True),
-            AgentAction("preserve_evidence", "Create forensic image of source workstation", "forensics", "medium", needs_escalation=True),
-            AgentAction("access_employee_records", "Review employee access rights and background", "hr_data_access", "high", sensitive_data=True, needs_escalation=True)
-        ]
-    },
-    "insider_threat": {
-        "title": "👤 Insider Threat Detection",
-        "description": "Employee accessing sensitive files outside normal work hours and job scope",
-        "context": "Marketing employee accessed finance database at 11:30 PM on weekend",
-        "actions": [
-            AgentAction("review_access_patterns", "Analyze employee's file access history", "read_logs", "medium"),
-            AgentAction("check_authorization_matrix", "Verify if access aligns with job role", "access_control_review", "medium"),
-            AgentAction("analyze_behavior_baseline", "Compare against normal behavior patterns", "behavior_analytics", "medium"),
-            AgentAction("revoke_excess_permissions", "Remove unauthorized access privileges", "access_control_management", "high", needs_escalation=True),
-            AgentAction("review_hr_records", "Access employee performance and disciplinary records", "hr_data_access", "high", sensitive_data=True, needs_escalation=True),
-            AgentAction("initiate_investigation", "Begin formal insider threat investigation", "investigation", "high", needs_escalation=True)
-        ]
-    }
+# -----------------------------
+# Safe calculator (no eval)
+# -----------------------------
+# Allowed operators
+_ALLOWED_OPS = {
+    ast.Add: op.add,
+    ast.Sub: op.sub,
+    ast.Mult: op.mul,
+    ast.Div: op.truediv,
+    ast.Pow: op.pow,
+    ast.USub: op.neg,
+    ast.Mod: op.mod,
 }
 
-def initialize_session_state():
-    """Initialize Streamlit session state variables"""
-    if 'selected_scenario' not in st.session_state:
-        st.session_state.selected_scenario = None
-    if 'execution_results' not in st.session_state:
-        st.session_state.execution_results = []
-    if 'audit_logs' not in st.session_state:
-        st.session_state.audit_logs = []
+def _safe_eval(node):
+    if isinstance(node, ast.Num):  # type: ignore[attr-defined]
+        return node.n
+    if isinstance(node, ast.Constant) and isinstance(node.value, (int, float)):
+        return node.value
+    if isinstance(node, ast.BinOp) and type(node.op) in _ALLOWED_OPS:
+        return _ALLOWED_OPS[type(node.op)](_safe_eval(node.left), _safe_eval(node.right))
+    if isinstance(node, ast.UnaryOp) and type(node.op) in _ALLOWED_OPS:
+        return _ALLOWED_OPS[type(node.op)](_safe_eval(node.operand))
+    raise ValueError("Unsupported expression")
 
-def display_header():
-    """Display the main header"""
-    st.title("🛡️ Policy-Bounded AI Agent Simulator")
-    st.markdown("### Experience how Policy Enforcement Layers control AI agent behavior in cybersecurity scenarios")
-    
-    with st.expander("ℹ️ About This Simulator"):
-        st.markdown("""
-        This simulator demonstrates the three-layer architecture of policy-bounded AI agents:
-        
-        1. **🧠 Reasoning Module**: The LLM generates a plan to address security incidents
-        2. **🛡️ Policy Enforcement Layer (PEL)**: Validates each action against organizational policies  
-        3. **⚡ Action Layer**: Executes only approved actions through secure APIs
-        
-        **Learning Objectives:**
-        - Understand how policies constrain autonomous agent behavior
-        - Experience the trade-offs between automation and control
-        - See how audit logging enables compliance and accountability
-        """)
+def safe_calculate(expr: str):
+    try:
+        node = ast.parse(expr, mode="eval").body  # type: ignore[arg-type]
+        return _safe_eval(node)
+    except Exception as e:
+        raise ValueError(f"Cannot calculate expression: {e}")
 
-def setup_sidebar():
-    """Setup the sidebar with policy controls"""
-    st.sidebar.header("🔧 Policy Configuration")
-    
-    st.sidebar.markdown("### Data Access Policies")
-    policies = {}
-    policies['read_logs'] = st.sidebar.checkbox("📋 Allow Security Log Access", value=True, help="Permits reading security and system logs", key='policy_read_logs')
-    policies['threat_intelligence'] = st.sidebar.checkbox("🔍 Allow Threat Intelligence Queries", value=True, help="Access to external threat feeds and IP reputation services", key='policy_threat_intelligence')
-    policies['hr_data_access'] = st.sidebar.checkbox("👥 Allow HR Data Access", value=False, help="Access to employee personal information and records", key='policy_hr_data_access')
-    
-    st.sidebar.markdown("### Action Policies")
-    policies['network_controls'] = st.sidebar.checkbox("🌐 Allow Network Controls", value=False, help="IP blocking, traffic filtering, network isolation", key='policy_network_controls')
-    policies['account_management'] = st.sidebar.checkbox("👤 Allow Account Management", value=False, help="User account disable/enable, permission changes", key='policy_account_management')
-    policies['endpoint_controls'] = st.sidebar.checkbox("💻 Allow Endpoint Controls", value=False, help="Endpoint isolation, file quarantine, process termination", key='policy_endpoint_controls')
-    
-    st.sidebar.markdown("### Governance Policies")
-    policies['require_escalation'] = st.sidebar.checkbox("⚠️ Require Human Escalation", value=True, help="High-risk actions need human approval", key='policy_require_escalation')
-    policies['audit_logging'] = st.sidebar.checkbox("📝 Enable Audit Logging", value=True, help="Log all decisions for compliance", key='policy_audit_logging')
-    
-    # Advanced policies
-    with st.sidebar.expander("🔐 Advanced Policies"):
-        policies['data_classification'] = st.sidebar.checkbox("📊 Allow Data Classification", value=False, key='policy_data_classification')
-        policies['forensics'] = st.sidebar.checkbox("🔍 Allow Forensic Actions", value=False, key='policy_forensics')
-        policies['investigation'] = st.sidebar.checkbox("🕵️ Allow Investigation Initiation", value=False, key='policy_investigation')
-        policies['behavior_analytics'] = st.sidebar.checkbox("📈 Allow Behavior Analytics", value=True, key='policy_behavior_analytics')
-        policies['access_control_review'] = st.sidebar.checkbox("🔐 Allow Access Control Review", value=True, key='policy_access_control_review')
-        policies['access_control_management'] = st.sidebar.checkbox("⚙️ Allow Access Control Management", value=False, key='policy_access_control_management')
-        policies['network_monitoring'] = st.sidebar.checkbox("📡 Allow Network Monitoring", value=True, key='policy_network_monitoring')
-        policies['communication'] = st.sidebar.checkbox("📢 Allow Communications", value=True, key='policy_communication')
-    
-    return policies
 
-def display_scenario_selection():
-    """Display scenario selection interface"""
-    st.header("🎯 Security Scenario Selection")
-    
-    cols = st.columns(2)
-    
-    for i, (scenario_id, scenario) in enumerate(SCENARIOS.items()):
-        col = cols[i % 2]
-        with col:
-            if st.button(scenario['title'], key=f"scenario_{scenario_id}", use_container_width=True):
-                st.session_state.selected_scenario = scenario_id
-                st.session_state.execution_results = []  # Clear previous results
-                st.rerun()
+# -----------------------------
+# "Agent" core (simple heuristic loop)
+# -----------------------------
+class TinyAgent:
+    def __init__(self, memory: list[str] | None = None, max_steps: int = 4):
+        self.memory = memory if memory is not None else []
+        self.max_steps = max_steps
+        self.trace: list[str] = []
 
-def display_selected_scenario():
-    """Display the selected scenario details"""
-    if st.session_state.selected_scenario:
-        scenario = SCENARIOS[st.session_state.selected_scenario]
-        
-        st.header(f"Selected: {scenario['title']}")
-        
-        col1, col2 = st.columns([2, 1])
-        
-        with col1:
-            st.markdown(f"**Incident Description:** {scenario['description']}")
-            st.markdown(f"**Context:** {scenario['context']}")
-        
-        with col2:
-            if st.button("🚀 Execute AI Agent", type="primary", use_container_width=True):
-                execute_agent_simulation()
+    def log(self, msg: str):
+        self.trace.append(msg)
 
-def execute_agent_simulation():
-    """Execute the AI agent simulation with policy enforcement"""
-    scenario = SCENARIOS[st.session_state.selected_scenario]
-    policies = setup_sidebar()
-    
-    # Initialize Policy Enforcement Layer
-    pel = PolicyEnforcementLayer(policies)
-    
-    # Clear previous results
-    st.session_state.execution_results = []
-    st.session_state.audit_logs = []
-    
-    # Show execution progress
-    progress_bar = st.progress(0)
-    status_text = st.empty()
-    
-    # Step 1: Input Processing
-    status_text.text("🔄 Step 1/4: Processing security incident input...")
-    progress_bar.progress(25)
-    time.sleep(1)
-    
-    # Step 2: Reasoning Module
-    status_text.text("🔄 Step 2/4: AI reasoning module generating action plan...")
-    progress_bar.progress(50)
-    time.sleep(1)
-    
-    # Step 3: Policy Enforcement
-    status_text.text("🔄 Step 3/4: Policy Enforcement Layer validating actions...")
-    progress_bar.progress(75)
-    
-    results = []
-    for action in scenario['actions']:
-        result = pel.evaluate_action(action)
-        results.append(result)
-        time.sleep(0.2)  # Simulate processing time
-    
-    # Step 4: Execution
-    status_text.text("🔄 Step 4/4: Executing approved actions...")
-    progress_bar.progress(100)
-    time.sleep(1)
-    
-    # Store results in session state
-    st.session_state.execution_results = results
-    st.session_state.audit_logs = pel.audit_log
-    
-    # Clear progress indicators
-    progress_bar.empty()
-    status_text.empty()
-    
-    st.rerun()
+    def tool_calculator(self, text: str):
+        self.log(f"TOOL(calculator) ← {text}")
+        try:
+            result = safe_calculate(text)
+            self.log(f"TOOL(calculator) → {result}")
+            return str(result)
+        except Exception as e:
+            self.log(f"TOOL(calculator) ERROR → {e}")
+            return f"Error: {e}"
 
-def display_results():
-    """Display execution results and analysis"""
-    if st.session_state.execution_results:
-        st.header("📊 Execution Results")
-        
-        results = st.session_state.execution_results
-        
-        # Summary metrics
-        col1, col2, col3, col4 = st.columns(4)
-        
-        approved = len([r for r in results if r.status == "approved"])
-        denied = len([r for r in results if r.status == "denied"])
-        escalated = len([r for r in results if r.status == "escalated"])
-        total = len(results)
-        
-        col1.metric("✅ Approved", approved, delta=f"{approved/total*100:.1f}%")
-        col2.metric("❌ Denied", denied, delta=f"{denied/total*100:.1f}%")
-        col3.metric("⚠️ Escalated", escalated, delta=f"{escalated/total*100:.1f}%")
-        col4.metric("📋 Total Actions", total)
-        
-        # Detailed results
-        st.subheader("Detailed Action Results")
-        
-        for result in results:
-            status_icon = {"approved": "✅", "denied": "❌", "escalated": "⚠️"}[result.status]
-            status_color = {"approved": "green", "denied": "red", "escalated": "orange"}[result.status]
-            
-            with st.expander(f"{status_icon} {result.action.description}"):
-                col1, col2 = st.columns([3, 1])
-                
-                with col1:
-                    st.markdown(f"**Status:** :{status_color}[{result.status.upper()}]")
-                    st.markdown(f"**Reason:** {result.reason}")
-                    st.markdown(f"**Risk Level:** {result.action.risk_level.upper()}")
-                    if result.action.sensitive_data:
-                        st.markdown("**⚠️ Involves Sensitive Data**")
-                
-                with col2:
-                    st.markdown(f"**Timestamp:** {result.timestamp}")
-                    st.markdown(f"**Permission Required:** `{result.action.requires_permission}`")
+    def tool_memory_search(self, query: str):
+        self.log(f"TOOL(memory.search) ← {query}")
+        hits = [m for m in self.memory if query.lower() in m.lower()]
+        self.log(f"TOOL(memory.search) → {hits[:3]}")
+        return hits
 
-def display_audit_logs():
-    """Display audit logs if enabled"""
-    if st.session_state.audit_logs:
-        st.header("📋 Audit Logs")
-        
-        # Convert to DataFrame for better display
-        df = pd.DataFrame(st.session_state.audit_logs)
-        
-        # Style the dataframe
-        def style_status(val):
-            colors = {"approved": "green", "denied": "red", "escalated": "orange"}
-            return f"color: {colors.get(val, 'black')}"
-        
-        styled_df = df.style.applymap(style_status, subset=['status'])
-        st.dataframe(styled_df, use_container_width=True)
-        
-        # Download audit logs
-        csv = df.to_csv(index=False)
-        st.download_button(
-            label="📥 Download Audit Logs",
-            data=csv,
-            file_name=f"agent_audit_logs_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-            mime="text/csv"
-        )
+    def act(self, goal: str, context: str = "") -> str:
+        """Very small reasoning loop: plan → try tools → draft answer."""
+        self.trace.clear()
+        plan = []
+        goal_l = goal.strip().lower()
 
-def display_learning_exercises():
-    """Display learning exercises and discussion questions"""
-    st.header("🎓 Learning Exercises")
-    
-    with st.expander("💡 Policy Design Exercise"):
-        st.markdown("""
-        **Try these policy configurations and observe the differences:**
-        
-        1. **Conservative Setup**: Disable all action policies, keep only read access
-           - *Question*: What can the agent accomplish? What are the limitations?
-        
-        2. **Balanced Setup**: Enable some actions but require escalation
-           - *Question*: How does escalation change the response time vs. safety trade-off?
-        
-        3. **Aggressive Setup**: Enable all permissions, disable escalation
-           - *Question*: What risks emerge? How might this impact security?
-        """)
-    
-    with st.expander("🤔 Discussion Questions"):
-        st.markdown("""
-        **Reflect on these questions:**
-        
-        1. **Risk vs. Speed**: How do you balance autonomous response speed with security oversight?
-        
-        2. **Policy Gaps**: What happens when a scenario requires actions not covered by existing policies?
-        
-        3. **Multi-Agent Systems**: If multiple agents need to coordinate, how should policies be synchronized?
-        
-        4. **Audit Requirements**: What audit information would your organization need for compliance?
-        """)
+        # Step 0: quick plan
+        if any(ch.isdigit() for ch in goal) and any(ch in "+-*/^%" for ch in goal):
+            plan = ["Try calculator", "Summarize the result"]
+        else:
+            plan = ["Search memory", "Draft a helpful answer"]
 
-def main():
-    """Main application function"""
-    initialize_session_state()
-    display_header()
-    
-    # Setup sidebar (this needs to be called to get policies)
-    policies = setup_sidebar()
-    
-    # Main content area
-    if not st.session_state.selected_scenario:
-        display_scenario_selection()
-    else:
-        display_selected_scenario()
-        display_results()
-        
-        if policies.get('audit_logging', False):
-            display_audit_logs()
-    
-    # Always show learning exercises at the bottom
-    st.divider()
-    display_learning_exercises()
-    
-    # Footer
+        self.log(f"PLAN: {plan}")
+
+        # Loop
+        answer = ""
+        for step in range(1, self.max_steps + 1):
+            self.log(f"STEP {step}")
+
+            if "calculator" in plan[0].lower():
+                answer = self.tool_calculator(goal)
+                plan.pop(0)
+                continue
+
+            if "search memory" in plan[0].lower():
+                _ = self.tool_memory_search(goal)
+                plan.pop(0)
+                continue
+
+            # Draft answer
+            if "draft" in plan[0].lower() or not plan:
+                if answer:
+                    answer = f"The result is: {answer}"
+                else:
+                    # fallback draft using context + memory
+                    notes = "; ".join(self.memory[-3:]) if self.memory else "no prior notes"
+                    answer = f"Here’s a simple response based on the goal and context.\n\n- Goal: {goal}\n- Context: {context or 'n/a'}\n- Memory: {notes}"
+                break
+
+        self.log("DONE")
+        return answer
+
+
+# -----------------------------
+# Streamlit UI
+# -----------------------------
+st.set_page_config(page_title="Tiny Policy-Free Agent (Starter)", page_icon="🤖", layout="wide")
+
+st.title("🤖 Tiny Agent — Starter Template")
+st.caption("A minimal, no-API agent you can extend with real tools later.")
+
+with st.sidebar:
+    st.header("Settings")
+    max_steps = st.slider("Max steps", min_value=1, max_value=8, value=4, key="max_steps_slider")
     st.markdown("---")
-    st.markdown("*Policy-Bounded AI Agent Simulator - Educational Demo*")
+    st.subheader("Scratchpad Memory")
+    mem_item = st.text_input("Add memory note", key="mem_input")
+    add = st.button("➕ Add to memory", use_container_width=True, key="add_mem_btn")
 
-if __name__ == "__main__":
-    main()
+    if "memory" not in st.session_state:
+        st.session_state.memory = []
+
+    if add and mem_item:
+        st.session_state.memory.append(mem_item)
+        st.success("Added note to memory.", icon="✅")
+
+    if st.session_state.memory:
+        st.write("**Current memory notes:**")
+        for i, note in enumerate(st.session_state.memory, start=1):
+            st.write(f"{i}. {note}")
+        if st.button("🗑️ Clear memory", use_container_width=True, key="clear_mem_btn"):
+            st.session_state.memory = []
+            st.info("Memory cleared.")
+
+st.markdown("### 1) Define your objective")
+goal = st.text_input("What should the agent do?", placeholder="e.g., 12*(3+5) or 'Summarize my notes about onboarding'")
+
+st.markdown("### 2) Optional context")
+context = st.text_area("Any extra info?", placeholder="Paste background details or constraints here...")
+
+run = st.button("🚀 Run agent", type="primary", use_container_width=True, key="run_btn")
+
+# Initialize agent once
+if "agent" not in st.session_state:
+    st.session_state.agent = TinyAgent(memory=st.session_state.get("memory", []), max_steps=max_steps)
+
+# Keep agent settings in sync
+st.session_state.agent.memory = st.session_state.get("memory", [])
+st.session_state.agent.max_steps = max_steps
+
+if run:
+    if not goal.strip():
+        st.warning("Please enter an objective first.")
+    else:
+        result = st.session_state.agent.act(goal, context)
+        st.success("Agent finished.", icon="✅")
+        st.markdown("### ✅ Result")
+        st.write(result)
+
+        with st.expander("🔎 Execution trace"):
+            for line in st.session_state.agent.trace:
+                st.code(line)
+
+st.markdown("---")
+st.markdown("**Next steps**: add real tools (e.g., web search, vector DB, code exec, email/calendar) and route actions through a policy layer if needed.")
+
