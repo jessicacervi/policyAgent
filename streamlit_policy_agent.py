@@ -37,26 +37,40 @@ def get_conn():
         pass
     return conn
 
-def init_db():
-    Path(DB_PATH).parent.mkdir(parents=True, exist_ok=True)
+def ensure_schema():
     with get_conn() as conn:
+        # --- policies table
         conn.execute("""
         CREATE TABLE IF NOT EXISTS policies (
             key TEXT PRIMARY KEY,
             value TEXT NOT NULL
         )
         """)
+        # --- audit_log table (create minimal, we'll add columns as needed)
         conn.execute("""
         CREATE TABLE IF NOT EXISTS audit_log (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             ts TEXT NOT NULL,
-            scenario TEXT NOT NULL,
             action TEXT NOT NULL,
-            allowed INTEGER NOT NULL,
-            params TEXT,
-            reason TEXT
+            allowed INTEGER NOT NULL
         )
         """)
+        # Inspect columns
+        cols = {row[1] for row in conn.execute("PRAGMA table_info(audit_log)")}
+        # Add missing columns
+        if "scenario" not in cols:
+            conn.execute("ALTER TABLE audit_log ADD COLUMN scenario TEXT DEFAULT ''")
+        if "params" not in cols:
+            conn.execute("ALTER TABLE audit_log ADD COLUMN params TEXT DEFAULT ''")
+        if "reason" not in cols:
+            conn.execute("ALTER TABLE audit_log ADD COLUMN reason TEXT DEFAULT ''")
+        conn.commit()
+
+def init_db():
+    Path(DB_PATH).parent.mkdir(parents=True, exist_ok=True)
+    ensure_schema()
+    # Seed default policies if empty
+    with get_conn() as conn:
         (n,) = conn.execute("SELECT COUNT(*) FROM policies").fetchone()
         if n == 0:
             defaults = {
