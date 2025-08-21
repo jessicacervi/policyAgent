@@ -75,7 +75,6 @@ def init_db():
         if n == 0:
             defaults = {
                 "allow_log_access": "true",
-                "allow_network_controls": "false",
                 "allow_account_management": "false",
                 "allow_endpoint_isolation": "false",
                 "require_human_approval": "false",
