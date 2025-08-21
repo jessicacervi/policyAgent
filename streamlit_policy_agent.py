@@ -1,11 +1,90 @@
 import ast
 import operator as op
+import sqlite3
+from datetime import datetime
 import streamlit as st
+
+DB_PATH = "policy_agent.db"
+
+# -----------------------------
+# SQLite helpers
+# -----------------------------
+def get_conn():
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute("PRAGMA journal_mode=WAL")
+    return conn
+
+def init_db():
+    with get_conn() as conn:
+        conn.execute("""
+        CREATE TABLE IF NOT EXISTS policies (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+        )
+        """)
+        conn.execute("""
+        CREATE TABLE IF NOT EXISTS audit_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ts TEXT NOT NULL,
+            action TEXT NOT NULL,
+            allowed INTEGER NOT NULL,
+            reason TEXT
+        )
+        """)
+        # Seed defaults if empty
+        cur = conn.execute("SELECT COUNT(*) FROM policies")
+        (n,) = cur.fetchone()
+        if n == 0:
+            defaults = {
+                "allow_calculator": "true",
+                "allow_memory_search": "true",
+                "require_human_approval": "false"
+            }
+            for k, v in defaults.items():
+                conn.execute(
+                    "INSERT INTO policies(key,value) VALUES(?,?)", (k, v)
+                )
+        conn.commit()
+
+def get_policies() -> dict[str, str]:
+    with get_conn() as conn:
+        rows = conn.execute("SELECT key, value FROM policies").fetchall()
+    return {k: v for k, v in rows}
+
+def set_policy(key: str, value: str):
+    with get_conn() as conn:
+        conn.execute(
+            "INSERT INTO policies(key,value) VALUES(?,?) "
+            "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+            (key, value),
+        )
+        conn.commit()
+
+def log_decision(action: str, allowed: bool, reason: str = ""):
+    with get_conn() as conn:
+        conn.execute(
+            "INSERT INTO audit_log(ts, action, allowed, reason) VALUES(?,?,?,?)",
+            (
+                datetime.utcnow().isoformat(timespec="seconds") + "Z",
+                action,
+                1 if allowed else 0,
+                reason,
+            ),
+        )
+        conn.commit()
+
+def read_audit(limit: int = 200):
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT ts, action, allowed, reason FROM audit_log "
+            "ORDER BY id DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+    return rows
 
 # -----------------------------
 # Safe calculator (no eval)
 # -----------------------------
-# Allowed operators
 _ALLOWED_OPS = {
     ast.Add: op.add,
     ast.Sub: op.sub,
@@ -22,33 +101,66 @@ def _safe_eval(node):
     if isinstance(node, ast.Constant) and isinstance(node.value, (int, float)):
         return node.value
     if isinstance(node, ast.BinOp) and type(node.op) in _ALLOWED_OPS:
-        return _ALLOWED_OPS[type(node.op)](_safe_eval(node.left), _safe_eval(node.right))
+        return _ALLOWED_OPS[type(node.op)](
+            _safe_eval(node.left), _safe_eval(node.right)
+        )
     if isinstance(node, ast.UnaryOp) and type(node.op) in _ALLOWED_OPS:
         return _ALLOWED_OPS[type(node.op)](_safe_eval(node.operand))
     raise ValueError("Unsupported expression")
 
 def safe_calculate(expr: str):
-    try:
-        node = ast.parse(expr, mode="eval").body  # type: ignore[arg-type]
-        return _safe_eval(node)
-    except Exception as e:
-        raise ValueError(f"Cannot calculate expression: {e}")
-
+    node = ast.parse(expr, mode="eval").body  # type: ignore[arg-type]
+    return _safe_eval(node)
 
 # -----------------------------
-# "Agent" core (simple heuristic loop)
+# Agent with policy enforcement
 # -----------------------------
-class TinyAgent:
+class PolicyBoundAgent:
     def __init__(self, memory: list[str] | None = None, max_steps: int = 4):
         self.memory = memory if memory is not None else []
         self.max_steps = max_steps
         self.trace: list[str] = []
+        self.policies = get_policies()
+
+    def refresh_policies(self):
+        self.policies = get_policies()
 
     def log(self, msg: str):
         self.trace.append(msg)
 
+    def check_policy(self, action: str) -> tuple[bool, str]:
+        require_approval = (
+            self.policies.get("require_human_approval", "false").lower() == "true"
+        )
+        if require_approval:
+            return False, "Blocked: require_human_approval=true"
+
+        if action == "calculator":
+            allowed = (
+                self.policies.get("allow_calculator", "true").lower() == "true"
+            )
+            return allowed, (
+                "Allowed by allow_calculator"
+                if allowed
+                else "Blocked by allow_calculator=false"
+            )
+        if action == "memory.search":
+            allowed = (
+                self.policies.get("allow_memory_search", "true").lower() == "true"
+            )
+            return allowed, (
+                "Allowed by allow_memory_search"
+                if allowed
+                else "Blocked by allow_memory_search=false"
+            )
+        return False, "Unknown action"
+
     def tool_calculator(self, text: str):
-        self.log(f"TOOL(calculator) ← {text}")
+        ok, why = self.check_policy("calculator")
+        log_decision("tool.calculator", ok, why)
+        self.log(f"POLICY → calculator: {ok} ({why})")
+        if not ok:
+            return "❌ Denied by policy."
         try:
             result = safe_calculate(text)
             self.log(f"TOOL(calculator) → {result}")
@@ -58,98 +170,132 @@ class TinyAgent:
             return f"Error: {e}"
 
     def tool_memory_search(self, query: str):
-        self.log(f"TOOL(memory.search) ← {query}")
+        ok, why = self.check_policy("memory.search")
+        log_decision("tool.memory.search", ok, why)
+        self.log(f"POLICY → memory.search: {ok} ({why})")
+        if not ok:
+            return []
         hits = [m for m in self.memory if query.lower() in m.lower()]
         self.log(f"TOOL(memory.search) → {hits[:3]}")
         return hits
 
     def act(self, goal: str, context: str = "") -> str:
-        """Very small reasoning loop: plan → try tools → draft answer."""
         self.trace.clear()
-        plan = []
+        self.refresh_policies()
         goal_l = goal.strip().lower()
+        plan = []
 
-        # Step 0: quick plan
-        if any(ch.isdigit() for ch in goal) and any(ch in "+-*/^%" for ch in goal):
-            plan = ["Try calculator", "Summarize the result"]
+        if any(ch.isdigit() for ch in goal_l) and any(ch in "+-*/^%" for ch in goal_l):
+            plan = ["Try calculator", "Summarize"]
         else:
-            plan = ["Search memory", "Draft a helpful answer"]
+            plan = ["Search memory", "Draft answer"]
 
         self.log(f"PLAN: {plan}")
-
-        # Loop
         answer = ""
-        for step in range(1, self.max_steps + 1):
-            self.log(f"STEP {step}")
 
-            if "calculator" in plan[0].lower():
+        for _ in range(self.max_steps):
+            if not plan:
+                break
+            step = plan.pop(0).lower()
+            if "calculator" in step:
                 answer = self.tool_calculator(goal)
-                plan.pop(0)
                 continue
-
-            if "search memory" in plan[0].lower():
+            if "search memory" in step:
                 _ = self.tool_memory_search(goal)
-                plan.pop(0)
                 continue
-
-            # Draft answer
-            if "draft" in plan[0].lower() or not plan:
+            if "summarize" in step or "draft" in step:
                 if answer:
                     answer = f"The result is: {answer}"
                 else:
-                    # fallback draft using context + memory
-                    notes = "; ".join(self.memory[-3:]) if self.memory else "no prior notes"
-                    answer = f"Here’s a simple response based on the goal and context.\n\n- Goal: {goal}\n- Context: {context or 'n/a'}\n- Memory: {notes}"
+                    notes = (
+                        "; ".join(self.memory[-3:]) if self.memory else "no prior notes"
+                    )
+                    answer = (
+                        f"Answer based on goal & context.\n"
+                        f"- Goal: {goal}\n- Context: {context or 'n/a'}\n- Memory: {notes}"
+                    )
                 break
 
+        log_decision("agent.finish", True, "Completed reasoning loop")
         self.log("DONE")
         return answer
-
 
 # -----------------------------
 # Streamlit UI
 # -----------------------------
-st.set_page_config(page_title="Tiny Policy-Free Agent (Starter)", page_icon="🤖", layout="wide")
+st.set_page_config(page_title="Policy-Bounded Tiny Agent", page_icon="🛡️", layout="wide")
+st.title("🛡️ Policy-Bounded Tiny Agent")
+st.caption("Policies & audit logs are stored in a local SQLite database.")
 
-st.title("🤖 Tiny Agent — Starter Template")
-st.caption("A minimal, no-API agent you can extend with real tools later.")
+init_db()
 
 with st.sidebar:
-    st.header("Settings")
-    max_steps = st.slider("Max steps", min_value=1, max_value=8, value=4, key="max_steps_slider")
+    st.header("Policy Store (SQLite)")
+    policies = get_policies()
+
+    allow_calc = st.checkbox(
+        "Allow calculator",
+        value=(policies.get("allow_calculator", "true").lower() == "true"),
+        key="pol_calc",
+    )
+    allow_mem = st.checkbox(
+        "Allow memory search",
+        value=(policies.get("allow_memory_search", "true").lower() == "true"),
+        key="pol_mem",
+    )
+    require_approval = st.checkbox(
+        "Require human approval (blocks tools)",
+        value=(policies.get("require_human_approval", "false").lower() == "true"),
+        key="pol_approval",
+    )
+
+    if st.button("💾 Save policies", use_container_width=True, key="save_policies"):
+        set_policy("allow_calculator", "true" if allow_calc else "false")
+        set_policy("allow_memory_search", "true" if allow_mem else "false")
+        set_policy("require_human_approval", "true" if require_approval else "false")
+        st.success("Policies saved to SQLite.", icon="✅")
+
     st.markdown("---")
     st.subheader("Scratchpad Memory")
-    mem_item = st.text_input("Add memory note", key="mem_input")
-    add = st.button("➕ Add to memory", use_container_width=True, key="add_mem_btn")
-
     if "memory" not in st.session_state:
         st.session_state.memory = []
 
-    if add and mem_item:
+    mem_item = st.text_input("Add note", key="mem_input")
+    if st.button("➕ Add", key="mem_add", use_container_width=True) and mem_item:
         st.session_state.memory.append(mem_item)
-        st.success("Added note to memory.", icon="✅")
+        st.success("Added note.")
 
     if st.session_state.memory:
-        st.write("**Current memory notes:**")
+        st.write("**Notes:**")
         for i, note in enumerate(st.session_state.memory, start=1):
             st.write(f"{i}. {note}")
-        if st.button("🗑️ Clear memory", use_container_width=True, key="clear_mem_btn"):
+        if st.button("🗑️ Clear memory", key="mem_clear", use_container_width=True):
             st.session_state.memory = []
             st.info("Memory cleared.")
 
 st.markdown("### 1) Define your objective")
-goal = st.text_input("What should the agent do?", placeholder="e.g., 12*(3+5) or 'Summarize my notes about onboarding'")
+goal = st.text_input(
+    "What should the agent do?",
+    placeholder="e.g., 12*(3+5) or 'Summarize my onboarding notes'",
+)
 
 st.markdown("### 2) Optional context")
-context = st.text_area("Any extra info?", placeholder="Paste background details or constraints here...")
+context = st.text_area(
+    "Any extra info?", placeholder="Paste background details or constraints here..."
+)
 
-run = st.button("🚀 Run agent", type="primary", use_container_width=True, key="run_btn")
+col_run, col_steps = st.columns([1, 1])
+with col_steps:
+    max_steps = st.slider("Max steps", 1, 8, 4, key="max_steps")
 
-# Initialize agent once
+with col_run:
+    run = st.button("🚀 Run agent", type="primary", use_container_width=True, key="run_agent")
+
 if "agent" not in st.session_state:
-    st.session_state.agent = TinyAgent(memory=st.session_state.get("memory", []), max_steps=max_steps)
+    st.session_state.agent = PolicyBoundAgent(
+        memory=st.session_state.get("memory", []), max_steps=max_steps
+    )
 
-# Keep agent settings in sync
 st.session_state.agent.memory = st.session_state.get("memory", [])
 st.session_state.agent.max_steps = max_steps
 
@@ -167,5 +313,15 @@ if run:
                 st.code(line)
 
 st.markdown("---")
-st.markdown("**Next steps**: add real tools (e.g., web search, vector DB, code exec, email/calendar) and route actions through a policy layer if needed.")
+st.markdown("### 🧾 Recent audit log (SQLite)")
+rows = read_audit(limit=100)
+if rows:
+    for ts, action, allowed, reason in rows:
+        status = "ALLOW" if allowed else "DENY"
+        st.write(f"- `{ts}` — **{action}** → **{status}** — {reason or ''}")
+else:
+    st.write("No audit entries yet.")
+
+st.caption("Tip: Toggle policies in the sidebar and re-run the agent to see enforcement in action.")
+
 
