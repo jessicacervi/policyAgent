@@ -9,6 +9,7 @@ import pandas as pd
 # Page configuration
 st.set_page_config(
     page_title="Policy-Bounded AI Agent Simulator",
+    page_icon="🛡️",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -162,29 +163,29 @@ def setup_sidebar():
     
     st.sidebar.markdown("### Data Access Policies")
     policies = {}
-    policies['read_logs'] = st.sidebar.checkbox("📋 Allow Security Log Access", value=True, help="Permits reading security and system logs")
-    policies['threat_intelligence'] = st.sidebar.checkbox("🔍 Allow Threat Intelligence Queries", value=True, help="Access to external threat feeds and IP reputation services")
-    policies['hr_data_access'] = st.sidebar.checkbox("👥 Allow HR Data Access", value=False, help="Access to employee personal information and records")
+    policies['read_logs'] = st.sidebar.checkbox("📋 Allow Security Log Access", value=True, help="Permits reading security and system logs", key='policy_read_logs')
+    policies['threat_intelligence'] = st.sidebar.checkbox("🔍 Allow Threat Intelligence Queries", value=True, help="Access to external threat feeds and IP reputation services", key='policy_threat_intelligence')
+    policies['hr_data_access'] = st.sidebar.checkbox("👥 Allow HR Data Access", value=False, help="Access to employee personal information and records", key='policy_hr_data_access')
     
     st.sidebar.markdown("### Action Policies")
-    policies['network_controls'] = st.sidebar.checkbox("🌐 Allow Network Controls", value=False, help="IP blocking, traffic filtering, network isolation")
-    policies['account_management'] = st.sidebar.checkbox("👤 Allow Account Management", value=False, help="User account disable/enable, permission changes")
-    policies['endpoint_controls'] = st.sidebar.checkbox("💻 Allow Endpoint Controls", value=False, help="Endpoint isolation, file quarantine, process termination")
+    policies['network_controls'] = st.sidebar.checkbox("🌐 Allow Network Controls", value=False, help="IP blocking, traffic filtering, network isolation", key='policy_network_controls')
+    policies['account_management'] = st.sidebar.checkbox("👤 Allow Account Management", value=False, help="User account disable/enable, permission changes", key='policy_account_management')
+    policies['endpoint_controls'] = st.sidebar.checkbox("💻 Allow Endpoint Controls", value=False, help="Endpoint isolation, file quarantine, process termination", key='policy_endpoint_controls')
     
     st.sidebar.markdown("### Governance Policies")
-    policies['require_escalation'] = st.sidebar.checkbox("⚠️ Require Human Escalation", value=True, help="High-risk actions need human approval")
-    policies['audit_logging'] = st.sidebar.checkbox("📝 Enable Audit Logging", value=True, help="Log all decisions for compliance")
+    policies['require_escalation'] = st.sidebar.checkbox("⚠️ Require Human Escalation", value=True, help="High-risk actions need human approval", key='policy_require_escalation')
+    policies['audit_logging'] = st.sidebar.checkbox("📝 Enable Audit Logging", value=True, help="Log all decisions for compliance", key='policy_audit_logging')
     
     # Advanced policies
     with st.sidebar.expander("🔐 Advanced Policies"):
-        policies['data_classification'] = st.sidebar.checkbox("📊 Allow Data Classification", value=False)
-        policies['forensics'] = st.sidebar.checkbox("🔍 Allow Forensic Actions", value=False)
-        policies['investigation'] = st.sidebar.checkbox("🕵️ Allow Investigation Initiation", value=False)
-        policies['behavior_analytics'] = st.sidebar.checkbox("📈 Allow Behavior Analytics", value=True)
-        policies['access_control_review'] = st.sidebar.checkbox("🔐 Allow Access Control Review", value=True)
-        policies['access_control_management'] = st.sidebar.checkbox("⚙️ Allow Access Control Management", value=False)
-        policies['network_monitoring'] = st.sidebar.checkbox("📡 Allow Network Monitoring", value=True)
-        policies['communication'] = st.sidebar.checkbox("📢 Allow Communications", value=True)
+        policies['data_classification'] = st.sidebar.checkbox("📊 Allow Data Classification", value=False, key='policy_data_classification')
+        policies['forensics'] = st.sidebar.checkbox("🔍 Allow Forensic Actions", value=False, key='policy_forensics')
+        policies['investigation'] = st.sidebar.checkbox("🕵️ Allow Investigation Initiation", value=False, key='policy_investigation')
+        policies['behavior_analytics'] = st.sidebar.checkbox("📈 Allow Behavior Analytics", value=True, key='policy_behavior_analytics')
+        policies['access_control_review'] = st.sidebar.checkbox("🔐 Allow Access Control Review", value=True, key='policy_access_control_review')
+        policies['access_control_management'] = st.sidebar.checkbox("⚙️ Allow Access Control Management", value=False, key='policy_access_control_management')
+        policies['network_monitoring'] = st.sidebar.checkbox("📡 Allow Network Monitoring", value=True, key='policy_network_monitoring')
+        policies['communication'] = st.sidebar.checkbox("📢 Allow Communications", value=True, key='policy_communication')
     
     return policies
 
@@ -389,6 +390,9 @@ def main():
     st.divider()
     display_learning_exercises()
     
+    # Footer
+    st.markdown("---")
+    st.markdown("*Policy-Bounded AI Agent Simulator - Educational Demo*")
 
 if __name__ == "__main__":
     main()
