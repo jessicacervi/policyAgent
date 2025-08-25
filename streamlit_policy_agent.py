@@ -190,7 +190,6 @@ SCENARIOS = {
     "brute_force": {
         "title": "Brute-force login from foreign IP",
         "description": "Multiple failed login attempts detected for a user account.",
-        "context": {"user": "jessica.c", "ip": "185.23.91.10", "keyword": "auth_fail jessica.c"},
         "playbook": [
             ("logs.search", "Search logs", lambda ctx: tool_logs_search(ctx["keyword"], "Brute-force")),
             ("network.block_ip", "Block offending IP", lambda ctx: tool_block_ip(ctx["ip"], "Brute-force")),
@@ -200,7 +199,6 @@ SCENARIOS = {
     "malware_endpoint": {
         "title": "Malware detected on endpoint",
         "description": "Flagged malware on workstation; lateral movement suspected.",
-        "context": {"host": "DESK-001", "keyword": "malware DESK-001"},
         "playbook": [
             ("endpoint.isolate", "Isolate endpoint", lambda ctx: tool_isolate_endpoint(ctx["host"], "Malware")),
             ("logs.search", "Search logs for IOCs", lambda ctx: tool_logs_search(ctx["keyword"], "Malware")),
@@ -209,7 +207,6 @@ SCENARIOS = {
     "phishing": {
         "title": "Phishing reported by employee",
         "description": "User reported a suspicious email with a credential-harvesting link.",
-        "context": {"user": "alex.t", "keyword": "email phishing alex.t"},
         "playbook": [
             ("logs.search", "Search mail logs", lambda ctx: tool_logs_search(ctx["keyword"], "Phishing")),
             ("account.disable", "Disable account", lambda ctx: tool_disable_account(ctx["user"], "Phishing")),
@@ -297,18 +294,16 @@ with st.sidebar:
         clear_audit()
         st.info("Audit log cleared.")
 
-st.markdown("### 1) Choose a scenario")
+st.markdown("#### 1) Choose an Incident Scenario")
 scenario_key = st.selectbox(
-    "Incident scenario",
+    "Select an incident scenario from the menu below",
     options=list(SCENARIOS.keys()),
     format_func=lambda k: SCENARIOS[k]["title"],
 )
 scenario = SCENARIOS[scenario_key]
 
 st.markdown(f"**Description:** {scenario['description']}")
-st.write("**Context:**")
-for k, v in scenario["context"].items():
-    st.write(f"- **{k}**: `{v}`")
+
 
 st.markdown("### 2) Run the Simulator")
 if st.button("Execute ", type="primary"):
