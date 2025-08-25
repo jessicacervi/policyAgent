@@ -126,7 +126,7 @@ def on_scenario_change():
     # Clear current trace so each scenario starts fresh
     st.session_state["trace"] = []
     try:
-        st.toast("Policies reset for the new scenario.", icon="✅")
+        st.toast("Policies reset for the new scenario.")
     except Exception:
         pass
 
