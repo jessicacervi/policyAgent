@@ -286,7 +286,7 @@ with st.sidebar:
         set_policy("allow_endpoint_isolation", "true" if allow_iso else "false")
         set_policy("require_human_approval", "true" if require else "false")
         set_policy("audit_logging", "true" if audit else "false")
-        st.success(f"Policies saved. DB @ {DB_PATH}", icon="✅")
+        st.success(f"Policies saved. DB @ {DB_PATH}")
 
     st.markdown("---")
     st.subheader("Audit Log")
