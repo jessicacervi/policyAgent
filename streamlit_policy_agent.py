@@ -223,17 +223,67 @@ SCENARIOS = {
 st.set_page_config(page_title="Cybersecurity Playbook Simulator", layout="wide")
 st.title("Cybersecurity Playbook Simulator")
 st.caption("Policy-bounded AI Agent simulator with audit logs.")
+with st.expander("📘 How to use this simulator (read me first!)", expanded=True):
+    st.markdown("""
+**Welcome!** This simulator shows how **policies** control what an automated incident response agent can do.
+
+### Quick steps
+1. **Set policies** in the sidebar (left).  
+2. **Pick a scenario** below.  
+3. Click **🚀 Execute playbook**.  
+4. Read the **Execution trace** (what the agent tried) and the **Audit log** (what was allowed/denied and why).
+
+### What the policies do
+- **Allow log access** — lets the agent search security/system logs.  
+- **Allow network controls** — allows actions like **block IP**.  
+- **Allow account management** — allows **disable user** actions.  
+- **Allow endpoint isolation** — allows isolating a host from the network.  
+- **Require human approval** — denies all tools (useful to see escalation/denial behavior).  
+- **Enable audit logging** — records every attempted action with ALLOW/DENY and reason.
+
+### Tips
+- Try running with everything **disabled** to see denials, then enable one policy at a time.  
+- Re-run the same scenario after changing policies to compare outcomes.  
+- The **Audit log** at the bottom is your source of truth.
+""")
 init_db()
 
 with st.sidebar:
     st.header("Policies Available")
     pol = get_policies()
-    allow_log = st.checkbox("Allow log access", value=(pol.get("allow_log_access","false").lower()=="true"))
-    allow_net = st.checkbox("Allow network controls", value=(pol.get("allow_network_controls","false").lower()=="true"))
-    allow_acct = st.checkbox("Allow account management", value=(pol.get("allow_account_management","false").lower()=="true"))
-    allow_iso = st.checkbox("Allow endpoint isolation", value=(pol.get("allow_endpoint_isolation","false").lower()=="true"))
-    require = st.checkbox("Require human approval", value=(pol.get("require_human_approval","false").lower()=="true"))
-    audit = st.checkbox("Enable audit logging", value=(pol.get("audit_logging","false").lower()=="true"))
+    st.markdown("### ℹ️ Quick Start")
+    st.write("1) Set policies ↓  \n2) Pick scenario →  \n3) Run playbook  \n4) Review audit log")
+    st.markdown("---")
+    allow_log = st.checkbox(
+    "Allow log access",
+    value=(pol.get("allow_log_access","true").lower()=="true"),
+    help="If disabled, the agent cannot query system/security logs.")
+
+    allow_net = st.checkbox(
+    "Allow network controls (block IP)",
+    value=(pol.get("allow_network_controls","false").lower()=="true"),
+    help="If disabled, IP blocks and similar network actions are denied.")
+
+    allow_acct = st.checkbox(
+    "Allow account management (disable user)",
+    value=(pol.get("allow_account_management","false").lower()=="true"),
+    help="If disabled, actions like disabling a user account are denied.")
+
+    allow_iso = st.checkbox(
+    "Allow endpoint isolation",
+    value=(pol.get("allow_endpoint_isolation","false").lower()=="true"),
+    help="If disabled, isolating a host from the network is denied.")
+
+    require = st.checkbox(
+    "Require human approval (blocks tools)",
+    value=(pol.get("require_human_approval","false").lower()=="true"),
+    help="When enabled, all tool actions are denied to simulate an approval-required environment.")
+
+    audit = st.checkbox(
+    "Enable audit logging",
+    value=(pol.get("audit_logging","true").lower()=="true"),
+    help="When enabled, every attempted action is recorded with allow/deny + reason.")
+
 
     if st.button("Save policies"):
         set_policy("allow_log_access", "true" if allow_log else "false")
