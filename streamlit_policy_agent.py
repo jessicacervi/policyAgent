@@ -220,13 +220,13 @@ SCENARIOS = {
 # -----------------------------
 # UI
 # -----------------------------
-st.set_page_config(page_title="Cybersecurity Playbook Simulator", page_icon="🛡️", layout="wide")
-st.title("🛡️ Cybersecurity Playbook Simulator")
-st.caption("Policy-bounded actions with SQLite-backed policies and audit logs.")
+st.set_page_config(page_title="Cybersecurity Playbook Simulator", layout="wide")
+st.title("Cybersecurity Playbook Simulator")
+st.caption("Policy-bounded AI Agent simulator with audit logs.")
 init_db()
 
 with st.sidebar:
-    st.header("Policy Store (SQLite)")
+    st.header("Policies Available")
     pol = get_policies()
     allow_log = st.checkbox("Allow log access", value=(pol.get("allow_log_access","true").lower()=="true"))
     allow_net = st.checkbox("Allow network controls", value=(pol.get("allow_network_controls","false").lower()=="true"))
@@ -235,7 +235,7 @@ with st.sidebar:
     require = st.checkbox("Require human approval", value=(pol.get("require_human_approval","false").lower()=="true"))
     audit = st.checkbox("Enable audit logging", value=(pol.get("audit_logging","true").lower()=="true"))
 
-    if st.button("💾 Save policies"):
+    if st.button("Save policies"):
         set_policy("allow_log_access", "true" if allow_log else "false")
         set_policy("allow_network_controls", "true" if allow_net else "false")
         set_policy("allow_account_management", "true" if allow_acct else "false")
@@ -246,7 +246,7 @@ with st.sidebar:
 
     st.markdown("---")
     st.subheader("Audit Log")
-    if st.button("🧹 Clear audit log"):
+    if st.button("Clear audit log"):
         clear_audit()
         st.info("Audit log cleared.")
 
