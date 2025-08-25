@@ -258,15 +258,15 @@ st.caption("Policy-bounded AI Agent simulator with audit logs.")
 
 with st.expander("How to use this simulator", expanded=False):
     st.markdown("""
-**Welcome!** This simulator lets you explore how **security policies** can allow or block automated responses during cyber incidents.
+**Welcome!** This simulator lets you explore how security policies can allow or block automated responses during cyber incidents.
 
 #### Instructions
 1. Choose a scenario from the menu below.              
 2. In the sidebar, toggle **one policy at a time** to allow or block specific automated responses. 
-3. Click **Save policies** to apply changes.
-4. Click **Execute** to run the policy-bounded agent.
+3. Click on **Save policies** to apply changes.
+4. Click on **Execute** to run the policy-bounded agent.
 5. Review the **Execution trace** and **Audit log** to see what actions were allowed or denied—and why.
-6. Repeat steps 2–5 until all actions for a scenario are allowed to complete.
+6. Repeat steps 2 to 5 until all actions for a scenario are allowed to complete.
 
 #### Policies
 - **Allow log access**: Lets the agent query security/system logs.  
