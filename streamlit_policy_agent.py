@@ -194,7 +194,7 @@ SCENARIOS = {
     },
     "malware_endpoint": {
         "title": "Malware detected on endpoint",
-        "description": "EDR flagged malware on workstation; lateral movement suspected.",
+        "description": "Flagged malware on workstation.",
         "playbook": [
             ("endpoint.isolate", "Isolate endpoint", lambda: tool_isolate_endpoint("Malware")),
             ("logs.search", "Search logs for IOCs", lambda: tool_logs_search("Malware")),
@@ -247,7 +247,7 @@ def on_scenario_change():
     reset_all_policies_to_disabled_ns()
     st.session_state["trace"] = []
     try:
-        st.toast("Policies reset for the new scenario.", icon="✅")
+        st.toast("Policies reset for the new scenario.")
     except Exception:
         pass
 
