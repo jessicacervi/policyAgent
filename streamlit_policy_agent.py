@@ -268,7 +268,7 @@ with st.expander("How to use this simulator", expanded=False):
 5. Review the **Execution trace** and **Audit log** to see what actions were allowed or denied—and why.
 6. Repeat steps 2 to 5 until all actions for a scenario are allowed to complete.
 
-#### Policies
+#### Policies Overview
 - **Allow log access**: Lets the agent query security/system logs.  
 - **Allow network controls**: Allows actions like blocking an IP.  
 - **Allow account management**: Allows disabling a user account.  
