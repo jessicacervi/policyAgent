@@ -221,21 +221,23 @@ st.info(f"Anonymous session: `{NS}` • "
 
 with st.expander("How to use this simulator", expanded=False):
     st.markdown("""
-**Welcome!** This simulator lets you explore how **security policies** can allow or block automated responses during cyber incidents.
+**Welcome!** This simulator lets you explore how security policies can allow or block automated responses during cyber incidents.
 
-**Quick steps**
-1. Choose a scenario below.  
-2. In the sidebar, toggle **one policy at a time** (then **Save policies**).  
-3. Click **Execute** to run the agent.  
-4. Review the **Execution trace** and **Audit log** to see what was allowed/denied—and why.
+#### Instructions
+1. Choose a scenario from the menu below.              
+2. In the sidebar, toggle **one policy at a time** to allow or block specific automated responses. 
+3. Click on **Save policies** to apply changes.
+4. Click on **Execute** to run the policy-bounded agent.
+5. Review the **Execution trace** and **Audit log** to see what actions were allowed or denied—and why.
+6. Repeat steps 2 to 5 until all actions for a scenario are allowed to complete.
 
-**Policies**
-- Allow log access — query security/system logs  
-- Allow network controls — block IP, etc.  
-- Allow account management — disable a user  
-- Allow endpoint isolation — isolate a host  
-- Require human approval — blocks all tools (simulates approval flow)  
-- Enable audit logging — record ALLOW/DENY + reason
+#### Policies Overview
+- **Allow log access**: Lets the agent query security/system logs.  
+- **Allow network controls**: Allows actions like blocking an IP.  
+- **Allow account management**: Allows disabling a user account.  
+- **Allow endpoint isolation**: Allows isolating a host from the network.  
+- **Require human approval**: Blocks all tools to simulate an approval workflow.  
+- **Enable audit logging**: Records every attempted action with ALLOW/DENY and a reason.
 """)
 
 # Initialize DB (creates tables on first run)
