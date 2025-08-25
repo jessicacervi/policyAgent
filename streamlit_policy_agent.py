@@ -225,11 +225,12 @@ with st.expander("How to use this simulator", expanded=False):
     st.markdown("""
 **Welcome**! This simulator helps you learn how enforced policies can allow or block specific automated responses during cyber incidents.
 
-#### Quick steps
+#### Instructions
 1. Begin by choosing a scenario from the menu below.              
-2. In the sidebar on the left, select the correct policies to allow or block specific automated responses.
-3. Click on **Execute** to run the policy-bounded agent.
-4. Read the **Execution trace** and the **Audit log** to see if the Agent acted correctly.
+2. In the sidebar on the left, select one policy at a time to allow or block specific automated responses. Click on "Save policies" to update your changes.
+3. Click on **Execute** to run the policy-bounded Agent.
+4. Read the **Execution trace** and the **Audit log** to see to see what actions were allowed or denied, and why.
+
 
 #### About each Policy:
 - **Allow log access**: Lets the agent search security and system logs.  
@@ -239,10 +240,6 @@ with st.expander("How to use this simulator", expanded=False):
 - **Require human approval**: Denies all tools. This policy is useful to see escalation/denial behavio.  
 - **Enable audit logging**: Records every attempted action with ALLOW/DENY and reason.
 
-### Tips
-- Try running with everything **disabled** to see denials, then enable one policy at a time.  
-- Re-run the same scenario after changing policies to compare outcomes.  
-- The **Audit log** at the bottom is your source of truth.
 """)
 init_db()
 
