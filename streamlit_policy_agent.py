@@ -227,9 +227,11 @@ with st.expander("How to use this simulator", expanded=False):
 
 #### Instructions
 1. Begin by choosing a scenario from the menu below.              
-2. In the sidebar on the left, select one policy at a time to allow or block specific automated responses. Click on "Save policies" to update your changes.
-3. Click on **Execute** to run the policy-bounded Agent.
-4. Read the **Execution trace** and the **Audit log** to see to see what actions were allowed or denied, and why.
+2. In the sidebar on the left, select one policy at a time to allow or block specific automated responses. 
+3. Click on "Save policies" to update your changes.
+4. Click on **Execute** to run the policy-bounded Agent.
+5. Read the **Execution trace** and the **Audit log** to see to see what actions were allowed or denied, and why.
+6. Repeat steps 3, 4, and 5 until all actions for a specific scenario are allowed.
 
 
 #### About each Policy:
