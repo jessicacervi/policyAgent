@@ -69,12 +69,13 @@ def ensure_schema():
 def init_db():
     Path(DB_PATH).parent.mkdir(parents=True, exist_ok=True)
     ensure_schema()
-    # Seed default policies if empty
+    # Seed default policies if empty (these are just initial seeds)
     with get_conn() as conn:
         (n,) = conn.execute("SELECT COUNT(*) FROM policies").fetchone()
         if n == 0:
             defaults = {
-                "allow_log_access": "true",
+                "allow_log_access": "true",            # initial seed only; we reset on scenario change
+                "allow_network_controls": "false",
                 "allow_account_management": "false",
                 "allow_endpoint_isolation": "false",
                 "require_human_approval": "false",
@@ -98,6 +99,40 @@ def set_policy(key: str, value: str):
         )
         conn.commit()
 
+# -----------------------------
+# Persistent "all disabled" reset (Option A)
+# -----------------------------
+DEFAULTS_DISABLED = {
+    "allow_log_access": "false",
+    "allow_network_controls": "false",
+    "allow_account_management": "false",
+    "allow_endpoint_isolation": "false",
+    "require_human_approval": "false",
+    "audit_logging": "true",   # keep logging on so learners can see decisions
+}
+
+def reset_all_policies_to_disabled():
+    with get_conn() as conn:
+        for k, v in DEFAULTS_DISABLED.items():
+            conn.execute(
+                "INSERT INTO policies(key,value) VALUES(?,?) "
+                "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                (k, v),
+            )
+        conn.commit()
+
+def on_scenario_change():
+    reset_all_policies_to_disabled()
+    # Clear current trace so each scenario starts fresh
+    st.session_state["trace"] = []
+    try:
+        st.toast("Policies reset for the new scenario.", icon="✅")
+    except Exception:
+        pass
+
+# -----------------------------
+# Audit helpers
+# -----------------------------
 def log_decision(scenario: str, action: str, allowed: bool, params: str = "", reason: str = ""):
     # Non-fatal audit: failure here should not crash the playbook
     try:
@@ -139,7 +174,7 @@ def check_policy(action: str) -> tuple[bool, str]:
         return False, "Blocked: require_human_approval=true"
     pol = get_policies()
     if action == "logs.search":
-        ok = pol.get("allow_log_access","true").lower() == "true"
+        ok = pol.get("allow_log_access","false").lower() == "true"
         return ok, "Allowed by allow_log_access" if ok else "Blocked by allow_log_access=false"
     if action == "network.block_ip":
         ok = pol.get("allow_network_controls","false").lower() == "true"
@@ -153,7 +188,7 @@ def check_policy(action: str) -> tuple[bool, str]:
     return False, "Unknown action"
 
 # -----------------------------
-# Tools (simulated)
+# Tools (simulated) — no context
 # -----------------------------
 def tool_logs_search(scenario_name: str) -> str:
     ok, why = check_policy("logs.search")
@@ -214,70 +249,89 @@ SCENARIOS = {
     },
 }
 
-
 # -----------------------------
 # UI
 # -----------------------------
 st.set_page_config(page_title="Cybersecurity Playbook Simulator", layout="wide")
 st.title("Cybersecurity Playbook Simulator")
 st.caption("Policy-bounded AI Agent simulator with audit logs.")
+
 with st.expander("How to use this simulator", expanded=False):
     st.markdown("""
-**Welcome**! This simulator helps you learn how enforced policies can allow or block specific automated responses during cyber incidents.
+**Welcome!** This simulator lets you explore how **security policies** can allow or block automated responses during cyber incidents.
 
 #### Instructions
-1. Begin by choosing a scenario from the menu below.              
-2. In the sidebar on the left, select one policy at a time to allow or block specific automated responses. 
-3. Click on "Save policies" to update your changes.
-4. Click on **Execute** to run the policy-bounded Agent.
-5. Read the **Execution trace** and the **Audit log** to see to see what actions were allowed or denied, and why.
-6. Repeat steps 3, 4, and 5 until all actions for a specific scenario are allowed.
+1. Choose a scenario from the menu below.              
+2. In the sidebar, toggle **one policy at a time** to allow or block specific automated responses. 
+3. Click **Save policies** to apply changes.
+4. Click **Execute** to run the policy-bounded agent.
+5. Review the **Execution trace** and **Audit log** to see what actions were allowed or denied—and why.
+6. Repeat steps 3–5 until all actions for a scenario are allowed to complete.
 
-
-#### About each Policy:
-- **Allow log access**: Lets the agent search security and system logs.  
-- **Allow network controls**: Allows actions like block IP.  
-- **Allow account management**: Allows disable user actions.  
-- **Allow endpoint isolation**: Allows isolating a host from the network.  
-- **Require human approval**: Denies all tools. This policy is useful to see escalation/denial behavio.  
-- **Enable audit logging**: Records every attempted action with ALLOW/DENY and reason.
-
+#### Policies
+- **Allow log access** — lets the agent query security/system logs.  
+- **Allow network controls** — allows actions like blocking an IP.  
+- **Allow account management** — allows disabling a user account.  
+- **Allow endpoint isolation** — allows isolating a host from the network.  
+- **Require human approval** — blocks all tools to simulate an approval workflow.  
+- **Enable audit logging** — records every attempted action with ALLOW/DENY and a reason.
 """)
+
+# Initialize DB
 init_db()
 
+# ---- Scenario selector FIRST (so reset happens before reading sidebar policies)
+st.markdown("#### 1) Choose an Incident Scenario")
+scenario_key = st.selectbox(
+    "Select an incident scenario from the menu below",
+    options=list(SCENARIOS.keys()),
+    format_func=lambda k: SCENARIOS[k]["title"],
+    key="scenario_select",
+    on_change=on_scenario_change,   # <-- persistent reset here
+)
+scenario = SCENARIOS[scenario_key]
+st.markdown(f"**Description:** {scenario['description']}")
+
+# ---- Sidebar policies (read AFTER scenario selection so reset is reflected)
 with st.sidebar:
     st.header("Policies Available")
-    pol = get_policies()
+    pol = get_policies()  # reflects reset_all_policies_to_disabled()
+
     allow_log = st.checkbox(
-    "Allow log access",
-    value=(pol.get("allow_log_access","true").lower()=="true"),
-    help="If disabled, the agent cannot query system/security logs.")
+        "Allow log access",
+        value=(pol.get("allow_log_access","false").lower()=="true"),
+        help="If disabled, the agent cannot query system/security logs."
+    )
 
     allow_net = st.checkbox(
-    "Allow network controls (block IP)",
-    value=(pol.get("allow_network_controls","false").lower()=="true"),
-    help="If disabled, IP blocks and similar network actions are denied.")
+        "Allow network controls (block IP)",
+        value=(pol.get("allow_network_controls","false").lower()=="true"),
+        help="If disabled, IP blocks and similar network actions are denied."
+    )
 
     allow_acct = st.checkbox(
-    "Allow account management (disable user)",
-    value=(pol.get("allow_account_management","false").lower()=="true"),
-    help="If disabled, actions like disabling a user account are denied.")
+        "Allow account management (disable user)",
+        value=(pol.get("allow_account_management","false").lower()=="true"),
+        help="If disabled, actions like disabling a user account are denied."
+    )
 
     allow_iso = st.checkbox(
-    "Allow endpoint isolation",
-    value=(pol.get("allow_endpoint_isolation","false").lower()=="true"),
-    help="If disabled, isolating a host from the network is denied.")
+        "Allow endpoint isolation",
+        value=(pol.get("allow_endpoint_isolation","false").lower()=="true"),
+        help="If disabled, isolating a host from the network is denied."
+    )
 
     require = st.checkbox(
-    "Require human approval (blocks tools)",
-    value=(pol.get("require_human_approval","false").lower()=="true"),
-    help="When enabled, all tool actions are denied to simulate an approval-required environment.")
+        "Require human approval (blocks tools)",
+        value=(pol.get("require_human_approval","false").lower()=="true"),
+        help="When enabled, all tool actions are denied to simulate an approval-required environment."
+    )
 
     audit = st.checkbox(
-    "Enable audit logging",
-    value=(pol.get("audit_logging","true").lower()=="true"),
-    help="When enabled, every attempted action is recorded with allow/deny + reason.")
-
+        "Enable audit logging",
+        value=(pol.get("audit_logging","true").lower()=="true"),
+        help="When enabled, every attempted action is recorded with allow/deny + reason."
+    )
 
     if st.button("Save policies"):
         set_policy("allow_log_access", "true" if allow_log else "false")
@@ -294,17 +348,7 @@ with st.sidebar:
         clear_audit()
         st.info("Audit log cleared.")
 
-st.markdown("#### 1) Choose an Incident Scenario")
-scenario_key = st.selectbox(
-    "Select an incident scenario from the menu below",
-    options=list(SCENARIOS.keys()),
-    format_func=lambda k: SCENARIOS[k]["title"],
-)
-scenario = SCENARIOS[scenario_key]
-
-st.markdown(f"**Description:** {scenario['description']}")
-
-
+# ---- Run simulator
 st.markdown("### 2) Run the Simulator")
 if st.button("Execute ", type="primary"):
     st.session_state.trace = []
@@ -316,6 +360,7 @@ if st.button("Execute ", type="primary"):
         st.warning(st.session_state.pop("_audit_warn"))
     st.session_state.trace.append("DONE")
 
+# ---- Output panes
 st.markdown("### Execution trace")
 if "trace" in st.session_state and st.session_state.trace:
     for line in st.session_state.trace:
@@ -330,5 +375,3 @@ if rows:
         st.write(f"- `{ts}` — **{sc}** — {action} → **{status}** — {params or ''} {('— '+reason) if reason else ''}")
 else:
     st.write("No audit entries yet.")
-
-
