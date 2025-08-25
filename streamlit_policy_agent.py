@@ -266,15 +266,15 @@ with st.expander("How to use this simulator", expanded=False):
 3. Click **Save policies** to apply changes.
 4. Click **Execute** to run the policy-bounded agent.
 5. Review the **Execution trace** and **Audit log** to see what actions were allowed or denied—and why.
-6. Repeat steps 3–5 until all actions for a scenario are allowed to complete.
+6. Repeat steps 2–5 until all actions for a scenario are allowed to complete.
 
 #### Policies
-- **Allow log access** — lets the agent query security/system logs.  
-- **Allow network controls** — allows actions like blocking an IP.  
-- **Allow account management** — allows disabling a user account.  
-- **Allow endpoint isolation** — allows isolating a host from the network.  
-- **Require human approval** — blocks all tools to simulate an approval workflow.  
-- **Enable audit logging** — records every attempted action with ALLOW/DENY and a reason.
+- **Allow log access**: Lets the agent query security/system logs.  
+- **Allow network controls**: Allows actions like blocking an IP.  
+- **Allow account management**: Allows disabling a user account.  
+- **Allow endpoint isolation**: Allows isolating a host from the network.  
+- **Require human approval**: Blocks all tools to simulate an approval workflow.  
+- **Enable audit logging**: Records every attempted action with ALLOW/DENY and a reason.
 """)
 
 # Initialize DB
@@ -300,7 +300,7 @@ with st.sidebar:
     allow_log = st.checkbox(
         "Allow log access",
         value=(pol.get("allow_log_access","false").lower()=="true"),
-        help="If disabled, the agent cannot query system/security logs."
+        help="If disabled, the agent cannot query system and security logs."
     )
 
     allow_net = st.checkbox(
