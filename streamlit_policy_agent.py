@@ -213,9 +213,8 @@ SCENARIOS = {
 # =============================
 # UI
 # =============================
-st.set_page_config(page_title="Cybersecurity Playbook Simulator", layout="wide")
-st.title("Cybersecurity Playbook Simulator")
-st.caption("Policy-bounded AI Agent with per-session isolation (Neon Postgres).")
+st.set_page_config(page_title="Policy-Bounded Agent Playbook Simulator", layout="wide")
+st.title("Policy-Bounded Agent Playbook Simulator")
 st.info(f"Anonymous session: `{NS}` • "
         f"[Open this session in a new tab](?ns={NS}&embed=true)", icon="👤")
 
