@@ -228,7 +228,7 @@ with st.expander("How to use this simulator", expanded=False):
 3. Click on **Save policies** to apply changes.
 4. Click on **Execute** to run the policy-bounded agent.
 5. Review the **Execution trace** and **Audit log** to see what actions were allowed or denied—and why.
-6. Repeat steps 2 to 5 until all actions for a scenario are allowed to complete.
+6. Repeat steps 2 to 5 until all actions for a scenario are allowed.
 
 #### Policies Overview
 - **Allow log access**: Lets the agent query security/system logs.  
