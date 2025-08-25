@@ -227,13 +227,13 @@ with st.expander("How to use this simulator", expanded=False):
     st.markdown("""
 **Welcome**! This simulator helps you learn how enforced policies can allow or block specific automated responses during cyber incidents.
 
-### Quick steps
-1. Begin by picking a scenario from the menu below.              
-2. Select policies in the sidebar on the left.  
-3. Click on **Execute playbook** to run the policy-bounded agent.
-4. Read the **Execution trace** (what the agent tried) and the **Audit log** (what was allowed/denied and why).
+#### Quick steps
+1. Begin by choosing a scenario from the menu below.              
+2. In the sidebar on the left, select the correct policies to allow or block specific automated responses.
+3. Click on **Execute** to run the policy-bounded agent.
+4. Read the **Execution trace** and the **Audit log** to see if the Agent acted correctly.
 
-### About each Policy:
+#### About each Policy:
 - **Allow log access**: Lets the agent search security and system logs.  
 - **Allow network controls**: Allows actions like block IP.  
 - **Allow account management**: Allows disable user actions.  
@@ -313,8 +313,8 @@ st.write("**Context:**")
 for k, v in scenario["context"].items():
     st.write(f"- **{k}**: `{v}`")
 
-st.markdown("### 2) Run the playbook")
-if st.button("🚀 Execute playbook", type="primary"):
+st.markdown("### 2) Run the Simulator")
+if st.button("Execute ", type="primary"):
     st.session_state.trace = []
     ctx = scenario["context"]
     st.session_state.trace.append(f"PLAN: {len(scenario['playbook'])} steps for {scenario['title']}")
@@ -326,13 +326,13 @@ if st.button("🚀 Execute playbook", type="primary"):
         st.warning(st.session_state.pop("_audit_warn"))
     st.session_state.trace.append("DONE")
 
-st.markdown("### ✅ Execution trace")
+st.markdown("### Execution trace")
 if "trace" in st.session_state and st.session_state.trace:
     for line in st.session_state.trace:
         st.code(line)
 
 st.markdown("---")
-st.markdown("### 🧾 Recent audit log")
+st.markdown("### Audit log")
 rows = read_audit(limit=100)
 if rows:
     for ts, sc, action, allowed, params, reason in rows:
