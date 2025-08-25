@@ -251,9 +251,6 @@ init_db()
 with st.sidebar:
     st.header("Policies Available")
     pol = get_policies()
-    st.markdown("### ℹ️ Quick Start")
-    st.write("1) Set policies ↓  \n2) Pick scenario →  \n3) Run playbook  \n4) Review audit log")
-    st.markdown("---")
     allow_log = st.checkbox(
     "Allow log access",
     value=(pol.get("allow_log_access","true").lower()=="true"),
