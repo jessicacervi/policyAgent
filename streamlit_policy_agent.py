@@ -49,16 +49,17 @@ def init_db_pg():
 # Anonymous per-session namespace (no IDs)
 # =============================
 def get_namespace() -> str:
-    # Use ?ns=... if present, otherwise create a random one and write it to the URL
-    qs = st.experimental_get_query_params()
-    ns = (qs.get("ns", [""])[0]).strip()
+    # use ?ns=... if present, otherwise create a random one and write it to the URL
+    qs = st.query_params
+    ns = (qs.get("ns", [""])[0]).strip() if "ns" in qs else ""
+
     if not ns:
         if "ns" not in st.session_state:
             st.session_state["ns"] = f"sess-{uuid.uuid4().hex[:8]}"
         ns = st.session_state["ns"]
         try:
-            # Persist in the URL so the session is bookmark/share friendly
-            st.experimental_set_query_params(ns=ns)
+            # persist in the URL so the session is bookmark/share friendly
+            st.query_params["ns"] = ns
         except Exception:
             pass
     return ns
