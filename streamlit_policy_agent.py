@@ -155,64 +155,65 @@ def check_policy(action: str) -> tuple[bool, str]:
 # -----------------------------
 # Tools (simulated)
 # -----------------------------
-def tool_logs_search(keyword: str, scenario_name: str) -> str:
+def tool_logs_search(scenario_name: str) -> str:
     ok, why = check_policy("logs.search")
-    log_decision(scenario_name, "logs.search", ok, params=f"keyword={keyword}", reason=why)
+    log_decision(scenario_name, "logs.search", ok, reason=why)
     if not ok:
         return f"❌ Denied — {why}"
-    return f"Found 3 log entries containing '{keyword}'. (simulated)"
+    return "Found suspicious log entries. (simulated)"
 
-def tool_block_ip(ip: str, scenario_name: str) -> str:
+def tool_block_ip(scenario_name: str) -> str:
     ok, why = check_policy("network.block_ip")
-    log_decision(scenario_name, "network.block_ip", ok, params=f"ip={ip}", reason=why)
+    log_decision(scenario_name, "network.block_ip", ok, reason=why)
     if not ok:
         return f"❌ Denied — {why}"
-    return f"✅ Blocked IP {ip} at firewall. (simulated)"
+    return "✅ Blocked malicious IP address. (simulated)"
 
-def tool_disable_account(user: str, scenario_name: str) -> str:
+def tool_disable_account(scenario_name: str) -> str:
     ok, why = check_policy("account.disable")
-    log_decision(scenario_name, "account.disable", ok, params=f"user={user}", reason=why)
+    log_decision(scenario_name, "account.disable", ok, reason=why)
     if not ok:
         return f"❌ Denied — {why}"
-    return f"✅ Disabled account {user} in IdP. (simulated)"
+    return "✅ Disabled compromised account. (simulated)"
 
-def tool_isolate_endpoint(host: str, scenario_name: str) -> str:
+def tool_isolate_endpoint(scenario_name: str) -> str:
     ok, why = check_policy("endpoint.isolate")
-    log_decision(scenario_name, "endpoint.isolate", ok, params=f"host={host}", reason=why)
+    log_decision(scenario_name, "endpoint.isolate", ok, reason=why)
     if not ok:
         return f"❌ Denied — {why}"
-    return f"✅ Isolated endpoint {host} from network. (simulated)"
+    return "✅ Isolated infected endpoint. (simulated)"
 
 # -----------------------------
-# Scenarios
+# Scenarios (no context)
 # -----------------------------
 SCENARIOS = {
     "brute_force": {
         "title": "Brute-force login from foreign IP",
         "description": "Multiple failed login attempts detected for a user account.",
         "playbook": [
-            ("logs.search", "Search logs", lambda ctx: tool_logs_search(ctx["keyword"], "Brute-force")),
-            ("network.block_ip", "Block offending IP", lambda ctx: tool_block_ip(ctx["ip"], "Brute-force")),
-            ("account.disable", "Disable account", lambda ctx: tool_disable_account(ctx["user"], "Brute-force")),
+            ("logs.search", "Search logs", lambda: tool_logs_search("Brute-force")),
+            ("network.block_ip", "Block offending IP", lambda: tool_block_ip("Brute-force")),
+            ("account.disable", "Disable account", lambda: tool_disable_account("Brute-force")),
         ],
     },
     "malware_endpoint": {
         "title": "Malware detected on endpoint",
-        "description": "Flagged malware on workstation; lateral movement suspected.",
+        "description": "EDR flagged malware on workstation; lateral movement suspected.",
         "playbook": [
-            ("endpoint.isolate", "Isolate endpoint", lambda ctx: tool_isolate_endpoint(ctx["host"], "Malware")),
-            ("logs.search", "Search logs for IOCs", lambda ctx: tool_logs_search(ctx["keyword"], "Malware")),
+            ("endpoint.isolate", "Isolate endpoint", lambda: tool_isolate_endpoint("Malware")),
+            ("logs.search", "Search logs for IOCs", lambda: tool_logs_search("Malware")),
         ],
     },
     "phishing": {
         "title": "Phishing reported by employee",
         "description": "User reported a suspicious email with a credential-harvesting link.",
         "playbook": [
-            ("logs.search", "Search mail logs", lambda ctx: tool_logs_search(ctx["keyword"], "Phishing")),
-            ("account.disable", "Disable account", lambda ctx: tool_disable_account(ctx["user"], "Phishing")),
+            ("logs.search", "Search mail logs", lambda: tool_logs_search("Phishing")),
+            ("account.disable", "Disable account", lambda: tool_disable_account("Phishing")),
         ],
     },
 }
+
 
 # -----------------------------
 # UI
@@ -308,11 +309,9 @@ st.markdown(f"**Description:** {scenario['description']}")
 st.markdown("### 2) Run the Simulator")
 if st.button("Execute ", type="primary"):
     st.session_state.trace = []
-    ctx = scenario["context"]
-    st.session_state.trace.append(f"PLAN: {len(scenario['playbook'])} steps for {scenario['title']}")
     for action_code, step_desc, fn in scenario["playbook"]:
         st.session_state.trace.append(f"STEP • {step_desc} [{action_code}]")
-        result = fn(ctx)
+        result = fn()
         st.session_state.trace.append(f"→ {result}")
     if "_audit_warn" in st.session_state:
         st.warning(st.session_state.pop("_audit_warn"))
