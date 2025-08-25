@@ -199,7 +199,7 @@ SCENARIOS = {
     },
     "malware_endpoint": {
         "title": "Malware detected on endpoint",
-        "description": "EDR flagged malware on workstation; lateral movement suspected.",
+        "description": "Flagged malware on workstation; lateral movement suspected.",
         "context": {"host": "DESK-001", "keyword": "malware DESK-001"},
         "playbook": [
             ("endpoint.isolate", "Isolate endpoint", lambda ctx: tool_isolate_endpoint(ctx["host"], "Malware")),
@@ -228,12 +228,12 @@ init_db()
 with st.sidebar:
     st.header("Policies Available")
     pol = get_policies()
-    allow_log = st.checkbox("Allow log access", value=(pol.get("allow_log_access","true").lower()=="true"))
+    allow_log = st.checkbox("Allow log access", value=(pol.get("allow_log_access","false").lower()=="true"))
     allow_net = st.checkbox("Allow network controls", value=(pol.get("allow_network_controls","false").lower()=="true"))
     allow_acct = st.checkbox("Allow account management", value=(pol.get("allow_account_management","false").lower()=="true"))
     allow_iso = st.checkbox("Allow endpoint isolation", value=(pol.get("allow_endpoint_isolation","false").lower()=="true"))
     require = st.checkbox("Require human approval", value=(pol.get("require_human_approval","false").lower()=="true"))
-    audit = st.checkbox("Enable audit logging", value=(pol.get("audit_logging","true").lower()=="true"))
+    audit = st.checkbox("Enable audit logging", value=(pol.get("audit_logging","false").lower()=="true"))
 
     if st.button("Save policies"):
         set_policy("allow_log_access", "true" if allow_log else "false")
