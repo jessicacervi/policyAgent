@@ -223,23 +223,23 @@ SCENARIOS = {
 st.set_page_config(page_title="Cybersecurity Playbook Simulator", layout="wide")
 st.title("Cybersecurity Playbook Simulator")
 st.caption("Policy-bounded AI Agent simulator with audit logs.")
-with st.expander("📘 How to use this simulator (read me first!)", expanded=True):
+with st.expander("How to use this simulator", expanded=False):
     st.markdown("""
-**Welcome!** This simulator shows how **policies** control what an automated incident response agent can do.
+**Welcome**! This simulator helps you learn how enforced policies can allow or block specific automated responses during cyber incidents.
 
 ### Quick steps
-1. **Set policies** in the sidebar (left).  
-2. **Pick a scenario** below.  
-3. Click **🚀 Execute playbook**.  
+1. Begin by picking a scenario from the menu below.              
+2. Select policies in the sidebar on the left.  
+3. Click on **Execute playbook** to run the policy-bounded agent.
 4. Read the **Execution trace** (what the agent tried) and the **Audit log** (what was allowed/denied and why).
 
-### What the policies do
-- **Allow log access** — lets the agent search security/system logs.  
-- **Allow network controls** — allows actions like **block IP**.  
-- **Allow account management** — allows **disable user** actions.  
-- **Allow endpoint isolation** — allows isolating a host from the network.  
-- **Require human approval** — denies all tools (useful to see escalation/denial behavior).  
-- **Enable audit logging** — records every attempted action with ALLOW/DENY and reason.
+### About each Policy:
+- **Allow log access**: Lets the agent search security and system logs.  
+- **Allow network controls**: Allows actions like block IP.  
+- **Allow account management**: Allows disable user actions.  
+- **Allow endpoint isolation**: Allows isolating a host from the network.  
+- **Require human approval**: Denies all tools. This policy is useful to see escalation/denial behavio.  
+- **Enable audit logging**: Records every attempted action with ALLOW/DENY and reason.
 
 ### Tips
 - Try running with everything **disabled** to see denials, then enable one policy at a time.  
